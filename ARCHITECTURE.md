@@ -21,3 +21,9 @@ rota → middleware JWT → controller → service → repository → PostgreSQL
 ```
 
 Para uma nova funcionalidade, crie o repositório se houver uma nova fonte de dados, implemente a regra no serviço, exponha-a no controlador e por fim registre a rota em `src/routes/index.ts`.
+
+## Documentação da API
+
+Com a aplicação em execução, a documentação interativa Swagger está disponível em `http://localhost:3333/documentation`. O documento OpenAPI em JSON pode ser obtido em `http://localhost:3333/documentation/json`.
+
+As rotas protegidas usam o esquema `bearerAuth`. Clique em **Authorize** na interface e informe o access token do Keycloak no formato `Bearer <token>`.

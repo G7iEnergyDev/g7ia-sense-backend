@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  g7i-api:
+    build: .
+    container_name: g7i_fastify_api
+    restart: unless-stopped
+    ports:
+      - "3333:3333"
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    mem_limit: 256m

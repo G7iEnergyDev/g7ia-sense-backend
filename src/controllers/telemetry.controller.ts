@@ -98,7 +98,7 @@ export async function currentTemperature(
     reply.status(404).send({ error: 'Nenhuma telemetria ENV encontrada para este dispositivo.' })
   );
 }
-export async function totalGeneration(
+export async function totalGenerationHome(
   request: FastifyRequest<{ Querystring: Query }>,
   reply: FastifyReply,
 ) {
@@ -106,7 +106,7 @@ export async function totalGeneration(
   if (!period) return;
   const device = await verifyDevice(request, reply, request.query.deviceId, 'AC');
   if (!device) return;
-  return telemetry.totalGeneration(device.deviceId, period);
+  return telemetry.totalGenerationHome(device.deviceId, period);
 }
 export async function dcAcEfficiency(
   request: FastifyRequest<{ Querystring: Query }>,
@@ -143,4 +143,13 @@ export async function devicesLastRead(
   const owner = await ensureInstallationOwner(request, reply, request.query.installationId);
   if (!owner) return;
   return telemetry.lastReads(owner.installationId);
+}
+
+export async function generationData(
+  request: FastifyRequest<{ Querystring: Query }>,
+  reply: FastifyReply,
+) {
+  const owner = await ensureInstallationOwner(request, reply, request.query.installationId);
+  if (!owner) return;
+  return telemetry.generationData(owner.installationId);
 }

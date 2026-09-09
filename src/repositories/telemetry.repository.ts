@@ -48,7 +48,7 @@ export class TelemetryRepository {
     );
   }
 
-  async totalGeneration(deviceId: string, period: Period) {
+  async totalGenerationHome(deviceId: string, period: Period) {
     return this.aggregate(
       `
       SELECT COALESCE(SUM(ac.generation_kwh), 0::numeric) AS total_kwh,
@@ -163,6 +163,102 @@ export class TelemetryRepository {
       dc: dc.rows,
       env: env.rows,
     };
+  }
+
+  async totalGeneration(installationId: string, period: Period) {
+    return this.aggregate(
+      `
+    SELECT
+      COALESCE(SUM(dc.generation_kwh), 0::numeric) AS total_kwh,
+      COALESCE(SUM(dc.sample_count), 0::bigint) AS sample_count,
+      b.period_start,
+      b.period_end
+    FROM bounds b
+    LEFT JOIN telemetry_dc_hourly dc
+      ON dc.bucket >= b.period_start
+      AND dc.bucket < b.period_end
+    INNER JOIN devices d
+      ON d.id = dc.device_id
+      AND d.installation_id = $1::uuid
+    GROUP BY b.period_start, b.period_end
+    `,
+      [installationId, period],
+    );
+  }
+
+  async getLatestSolar(installationId: string) {
+    return this.aggregate(
+      `
+    SELECT env.solar
+    FROM telemetry_env env
+    INNER JOIN devices d
+      ON d.id = env.device_id
+    WHERE d.installation_id = $1::uuid
+      AND env.solar IS NOT NULL
+    ORDER BY env.time DESC
+    LIMIT 1
+    `,
+      [installationId],
+    );
+  }
+
+  async getInstallationEfficiencyData(installationId: string) {
+    const result = await this.aggregate(
+      `
+    WITH hourly_solar AS (
+      SELECT
+        date_trunc('hour', env.time) AS bucket,
+        env.device_id,
+        AVG(env.solar) AS avg_solar
+      FROM telemetry_env env
+      INNER JOIN devices d
+        ON d.id = env.device_id
+      WHERE d.installation_id = $1::uuid
+        AND env.solar IS NOT NULL
+      GROUP BY
+        date_trunc('hour', env.time),
+        env.device_id
+    ),
+
+    hourly_ideal AS (
+      SELECT
+        bucket,
+        SUM(
+          0.56 * (avg_solar / 1000.0)
+        ) AS ideal_generation_kwh,
+        AVG(avg_solar) AS irradiation
+      FROM hourly_solar
+      GROUP BY bucket
+    ),
+
+    hourly_real AS (
+      SELECT
+        dc.bucket,
+        SUM(dc.generation_kwh) AS real_generation_kwh
+      FROM telemetry_dc_hourly dc
+      INNER JOIN devices d
+        ON d.id = dc.device_id
+      WHERE d.installation_id = $1::uuid
+      GROUP BY dc.bucket
+    )
+
+    SELECT
+      i.bucket,
+      COALESCE(r.real_generation_kwh, 0) AS real_generation_kwh,
+      i.ideal_generation_kwh,
+      i.irradiation
+
+    FROM hourly_ideal i
+
+    LEFT JOIN hourly_real r
+      ON r.bucket = i.bucket
+
+    ORDER BY i.bucket;
+    `,
+      [installationId],
+    );
+
+    return result.rows;
   }
 
   private async aggregate(sql: string, params: unknown[]) {

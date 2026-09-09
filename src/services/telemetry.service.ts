@@ -2,6 +2,7 @@ import type { Period, DeviceType } from '../models/device.js';
 import { DeviceRepository } from '../repositories/device.repository.js';
 import { TelemetryRepository } from '../repositories/telemetry.repository.js';
 import { DevicesLastRead, AcLastFeed, DcLastFeed, EnvLastFeed } from '../types/DevicesLastRead.js';
+import { GenerationData } from '../types/GenerationPageData.js';
 
 export class TelemetryService {
   constructor(
@@ -63,8 +64,8 @@ export class TelemetryService {
     };
   }
 
-  async totalGeneration(deviceId: string, period: Period) {
-    const row = (await this.telemetry.totalGeneration(deviceId, period)).rows[0]!;
+  async totalGenerationHome(deviceId: string, period: Period) {
+    const row = (await this.telemetry.totalGenerationHome(deviceId, period)).rows[0]!;
     return {
       deviceId,
       deviceType: 'AC',
@@ -192,5 +193,46 @@ export class TelemetryService {
       dc: mapDc(dc),
       env: mapEnv(env),
     };
+  }
+
+  async generationData(installationId: string): Promise<GenerationData> {
+    const data = await this.telemetry.getInstallationEfficiencyData(installationId);
+
+    const totalGeneration = data.reduce((sum, item) => sum + Number(item.realGenerationKwh), 0);
+
+    const totalIdealGeneration = data.reduce(
+      (sum, item) => sum + Number(item.idealGenerationKwh),
+      0,
+    );
+
+    const avgEfficiency = totalIdealGeneration > 0 ? totalGeneration / totalIdealGeneration : 0;
+
+    const currentIrradiation = data.length > 0 ? Number(data[data.length - 1].irradiation) : 0;
+
+    const chartData = data.map((item) => ({
+      label: this.formatChartLabel(item.bucket),
+      leftValue: Number(item.realGenerationKwh),
+      leftValue2: Number(item.idealGenerationKwh),
+      rightValue: Number(item.irradiation),
+    }));
+
+    return {
+      installationId,
+      totalGeneration,
+      currentIrradiation,
+      avgEfficiency,
+      chartData,
+    };
+  }
+
+  private formatChartLabel(date: Date | string | null): string {
+    if (typeof date != 'string' && date) {
+      return date.toLocaleTimeString('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } else {
+      return 'xxx';
+    }
   }
 }
